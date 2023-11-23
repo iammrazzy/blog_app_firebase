@@ -16,8 +16,8 @@ class _HomeState extends State<Home> {
 
   // All screens
   List screens = [
-    const HomeBlog(),
-    const FavoriteBlog(),
+    HomeBlog(),
+    FavoriteBlog(),
   ];
   @override
   Widget build(BuildContext context) {
