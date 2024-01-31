@@ -1,13 +1,13 @@
 import 'package:blog_app/model/blog_model.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter_file_downloader/flutter_file_downloader.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:percent_indicator/percent_indicator.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:image_gallery_saver/image_gallery_saver.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:marquee/marquee.dart';
@@ -22,12 +22,7 @@ class BlogDetail extends StatefulWidget {
 }
 
 class _BlogDetailState extends State<BlogDetail> {
-  // Get user info
   final user = FirebaseAuth.instance.currentUser;
-
-  // Downloading progress
-  double? _progress;
-  // Bookmark
   bool isBookmark = false;
 
   // Launch URL
@@ -39,54 +34,30 @@ class _BlogDetailState extends State<BlogDetail> {
     }
   }
 
-  // Download image from URL of firebase storage
-  Future downloadImage() async {
-    final url = widget.blog.blogImage;
-    await FileDownloader.downloadFile(
-      url: url,
-      name: '',
-      onProgress: (name, progress) {
-        setState(
-          () {
-            _progress = progress;
-          },
-        );
-        debugPrint('Download in progress: $progress');
-      },
-      onDownloadCompleted: (value) {
-        setState(() {
-          _progress = null;
-        });
-        debugPrint('File path  $value ');
-      },
-    );
-  }
-
-  // Get access to storage to download image
-  Future getPermission() async {
-    final permissionStatus = await Permission.storage.status;
-    if (permissionStatus.isDenied) {
-      // Here just ask for the permission for the first time
-      await Permission.storage.request();
-
-      // if (permissionStatus.isDenied) {
-      //   await openAppSettings();
-      // }
-    } else if (permissionStatus.isPermanentlyDenied) {
-      // Here open app settings for user to manually enable permission in case
-      // where permission was permanently denied
-      await openAppSettings();
-    } else {
-      // Do stuff that require permission here
-      downloadImage().whenComplete(
-        () {
-          showMSG(
-            'Image downloaded...!',
-            Colors.purple,
-          );
-          print('Downloaded image...!');
-        },
+  // save image
+  void saveImage(String imageUrl) async {
+    try {
+      String name = DateTime.now().toString();
+      final response = await Dio().get(
+        imageUrl,
+        options: Options(
+          responseType: ResponseType.bytes,
+          receiveTimeout: const Duration(minutes: 1),
+          validateStatus: (status) => status! < 500,
+        ),
       );
+
+      final result = await ImageGallerySaver.saveImage(
+        Uint8List.fromList(response.data),
+        quality: 100,
+        name: 'BlogApp/$name',
+      );
+
+      print('Result: 👉 $result');
+      showMSG('Image saved to Gallery!', Colors.indigo);
+    } catch (e) {
+      print('Error fetching or saving image: $e');
+      showMSG('Error fetching or saving image: $e', Colors.red);
     }
   }
 
@@ -332,32 +303,14 @@ class _BlogDetailState extends State<BlogDetail> {
                               ),
                             ),
                             const SizedBox(width: 5.0),
-                            _progress != null
-                                ? CircleAvatar(
-                                    child: Center(
-                                      child: CircularPercentIndicator(
-                                        radius: 20.0,
-                                        lineWidth: 3.0,
-                                        percent: (_progress! / 100),
-                                        center: Text(
-                                          '$_progress%',
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.purple,
-                                          ),
-                                        ),
-                                        progressColor: Colors.purple,
-                                      ),
-                                    ),
-                                  )
-                                : CircleAvatar(
-                                    child: IconButton(
-                                      onPressed: () {
-                                        getPermission();
-                                      },
-                                      icon: const Icon(Icons.download),
-                                    ),
-                                  )
+                            CircleAvatar(
+                              child: IconButton(
+                                onPressed: () {
+                                  saveImage(widget.blog.blogImage);
+                                },
+                                icon: const Icon(Icons.download),
+                              ),
+                            )
                           ],
                         ),
                       ],
